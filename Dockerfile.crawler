@@ -18,7 +18,7 @@ COPY . .
 
 # 构建爬虫应用
 ARG APP_VERSION=dev
-RUN go build -ldflags "-X 'main.Version=${APP_VERSION}'" -o crawler .
+RUN go build -ldflags "-X 'main.Version=${APP_VERSION}'" -o mini4k-crawler ./cmd/crawler
 
 # 使用 Alpine Linux 作为运行阶段
 FROM alpine:latest

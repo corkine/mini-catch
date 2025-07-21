@@ -18,7 +18,7 @@ COPY . .
 
 # 构建应用
 ARG APP_VERSION=dev
-RUN CGO_ENABLED=1 go build -ldflags "-X 'main.Version=${APP_VERSION}'" -o app .
+RUN CGO_ENABLED=1 go build -ldflags "-X 'main.Version=${APP_VERSION}'" -o mini-catch ./cmd/server
 
 # 使用轻量级的 alpine 镜像作为运行环境
 FROM alpine:latest
