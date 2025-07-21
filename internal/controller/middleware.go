@@ -1,19 +1,14 @@
-package auth
+package handlers
 
 import (
 	"encoding/base64"
+	"mini-catch/internal/config"
 	"net/http"
 	"strings"
 )
 
-// Config 认证配置
-type Config struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // 认证中间件
-func AuthMiddleware(config Config, next http.Handler) http.Handler {
+func AuthMiddleware(config *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 跳过不需要认证的路径
 		if shouldSkipAuth(r.URL.Path) {
@@ -44,7 +39,7 @@ func AuthMiddleware(config Config, next http.Handler) http.Handler {
 }
 
 // 验证认证信息
-func validateAuth(authHeader string, config Config) bool {
+func validateAuth(authHeader string, config *config.Config) bool {
 	// 移除 "Bearer " 前缀（如果存在）
 	authHeader = strings.TrimPrefix(authHeader, "Bearer ")
 
@@ -64,7 +59,7 @@ func validateAuth(authHeader string, config Config) bool {
 	password := parts[1]
 
 	// 验证用户名和密码
-	return username == config.Username && password == config.Password
+	return username == config.Auth.Username && password == config.Auth.Password
 }
 
 // shouldSkipAuth 判断是否需要跳过认证

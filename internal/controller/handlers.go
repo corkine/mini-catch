@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"mini-catch/internal/auth"
+	"mini-catch/internal/config"
 	"mini-catch/internal/database"
 	"mini-catch/internal/slack"
 
@@ -18,15 +18,15 @@ import (
 // Handler HTTP处理器
 type Handler struct {
 	db       *database.Database
-	auth     auth.Config
+	config   config.Config
 	notifier *slack.Notifier
 }
 
 // NewHandler 创建新的处理器
-func NewHandler(db *database.Database, authConfig auth.Config, notifier *slack.Notifier) *Handler {
+func NewHandler(db *database.Database, authConfig config.Config, notifier *slack.Notifier) *Handler {
 	return &Handler{
 		db:       db,
-		auth:     authConfig,
+		config:   authConfig,
 		notifier: notifier,
 	}
 }
@@ -58,13 +58,13 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 验证用户名和密码
-	if req.Username != h.auth.Username || req.Password != h.auth.Password {
+	if req.Username != h.config.Auth.Username || req.Password != h.config.Auth.Password {
 		h.errorResponse(w, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
 
 	// 生成认证令牌
-	token := auth.GenerateAuthToken(req.Username, req.Password)
+	token := GenerateAuthToken(req.Username, req.Password)
 
 	// 设置 Cookie
 	http.SetCookie(w, &http.Cookie{
@@ -78,25 +78,6 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.successResponse(w, LoginResponse{Token: token})
-}
-
-// 错误响应
-func (h *Handler) errorResponse(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(Response{
-		Success: false,
-		Message: message,
-	})
-}
-
-// 成功响应
-func (h *Handler) successResponse(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(Response{
-		Success: true,
-		Data:    data,
-	})
 }
 
 // GetSeriesList 获取剧集列表
@@ -281,8 +262,6 @@ func (h *Handler) ClearSeriesHistory(w http.ResponseWriter, r *http.Request) {
 
 // HandleFetchTask 爬虫任务接口 - GET
 func (h *Handler) HandleFetchTask(w http.ResponseWriter, r *http.Request) {
-	// 认证已经在中间件中处理，这里直接获取任务
-
 	// 获取所有启用的剧集URL
 	urls, err := h.db.GetAllTrackingURLs()
 	if err != nil {
@@ -349,4 +328,23 @@ func (h *Handler) HandleFetchTaskCallback(w http.ResponseWriter, r *http.Request
 		log.Printf("爬虫任务失败: %s", callback.Message)
 		h.errorResponse(w, http.StatusBadRequest, "FAILED: "+callback.Message)
 	}
+}
+
+// 错误响应
+func (h *Handler) errorResponse(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(Response{
+		Success: false,
+		Message: message,
+	})
+}
+
+// 成功响应
+func (h *Handler) successResponse(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(Response{
+		Success: true,
+		Data:    data,
+	})
 }
