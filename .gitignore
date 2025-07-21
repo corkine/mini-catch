@@ -15,10 +15,6 @@
 *.bak
 *.DS_Store
 
-# Go modules
-go.sum
-go.work.sum
-
 # Node
 node_modules/
 
