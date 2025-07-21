@@ -1,0 +1,51 @@
+# Go
+/bin/
+/app
+/crawler
+*.exe
+*.test
+*.out
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.swp
+*.swo
+*.tmp
+*.bak
+*.DS_Store
+
+# Go modules
+go.sum
+go.work.sum
+
+# Node
+node_modules/
+
+# 前端构建产物
+/dist/
+/static/*.js.map
+
+# 数据库
+/data/*.db
+/data/*.sqlite*
+
+# Docker
+*.tar
+
+# 编辑器/IDE
+.vscode/
+.idea/
+*.iml
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# CI/CD
+cls-deployment-trigger.txt
+mini-catch-deployment-trigger.txt
+
+# 其他
+.env
+.env.* 

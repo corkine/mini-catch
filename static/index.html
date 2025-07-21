@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Catch 剧集追踪</title>
+    <script src="tailwind.js"></script>
+    <script defer src="alpine.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div x-data="app()" x-init="checkAuth()" class="container mx-auto px-4 py-8">
+        <!-- 登录界面 -->
+        <div x-show="!isAuthenticated" 
+        x-cloak
+        class="flex items-center justify-center py-8">
+            <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+                <div class="text-center mb-6">
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                        <i class="fas fa-tv mr-2"></i>Mini-Catch
+                    </h1>
+                    <p class="text-gray-600">请登录以继续</p>
+                </div>
+                
+                <form @submit.prevent="login()">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                        <input type="text" x-model="loginForm.username" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                        <input type="password" x-model="loginForm.password" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <div x-show="loginError" x-cloak class="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
+                        <span x-text="loginError"></span>
+                    </div>
+                    
+                    <button type="submit" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md">
+                        登录
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 主界面 -->
+        <div x-show="isAuthenticated">
+            <!-- 头部 -->
+            <div class="mb-8">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                            <i class="fas fa-tv mr-2"></i>Mini-Catch 剧集追踪
+                        </h1>
+                        <p class="text-gray-600">追踪你喜爱的剧集，及时获取更新通知</p>
+                    </div>
+                    <button @click="logout()" 
+                            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-sign-out-alt mr-2"></i>退出登录
+                    </button>
+                </div>
+            </div>
+
+        <!-- 添加新剧集按钮 -->
+        <div class="mb-6">
+            <button @click="showAddModal = true" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center">
+                <i class="fas fa-plus mr-2"></i>添加新剧集
+            </button>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-blue-100 rounded-lg">
+                        <i class="fas fa-tv text-blue-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-gray-500">总剧集</p>
+                        <p class="text-lg font-semibold" x-text="series ? series.length : 0"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <i class="fas fa-eye text-green-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-gray-500">已观看</p>
+                        <p class="text-lg font-semibold" x-text="series ? series.filter(s => s.is_watched).length : 0"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-yellow-100 rounded-lg">
+                        <i class="fas fa-clock text-yellow-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-gray-500">追踪中</p>
+                        <p class="text-lg font-semibold" x-text="series ? series.filter(s => s.is_tracking).length : 0"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-red-100 rounded-lg">
+                        <i class="fas fa-bell text-red-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-gray-500">未观看</p>
+                        <p class="text-lg font-semibold" x-text="series ? series.filter(s => !s.is_watched).length : 0"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 剧集列表 -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">剧集列表</h2>
+            </div>
+            
+            <!-- 加载状态 -->
+            <div x-show="loading" x-cloak class="p-8 text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p class="mt-2 text-gray-600">加载中...</p>
+            </div>
+
+            <!-- 空状态 -->
+            <div x-show="!loading && (!series || series.length === 0)" class="p-8 text-center">
+                <i class="fas fa-tv text-4xl text-gray-300 mb-4"></i>
+                <p class="text-gray-600">还没有添加任何剧集</p>
+                <button @click="showAddModal = true" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    添加第一个剧集
+                </button>
+            </div>
+
+            <!-- 剧集卡片 -->
+            <div x-show="!loading && series && series.length > 0" class="divide-y divide-gray-200">
+                <template x-for="item in series" :key="item.id">
+                    <div class="p-6 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <h3 class="text-lg font-semibold text-gray-900" x-text="item.name"></h3>
+                                    <div class="ml-2 flex space-x-1">
+                                        <span x-show="item.is_tracking" 
+                                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-eye mr-1"></i>追踪中
+                                        </span>
+                                        <span x-show="!item.is_tracking" 
+                                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            <i class="fas fa-pause mr-1"></i>已暂停
+                                        </span>
+                                        <span x-show="item.is_watched" 
+                                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <i class="fas fa-check mr-1"></i>已观看
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <p class="text-sm text-gray-600 mb-2">
+                                    <i class="fas fa-link mr-1"></i>
+                                    <a :href="item.url" target="_blank" class="text-blue-600 hover:underline" x-text="item.url"></a>
+                                </p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-1 gap-1 text-sm">
+                                    <div>
+                                        <span class="text-gray-500">当前更新:</span>
+                                        <span class="font-medium ml-1" x-text="item.current || '暂无'"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">历史集数:</span>
+                                        <span class="font-medium ml-1" x-text="(item.history ? item.history.length : 0) + ' 集'"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">更新时间:</span>
+                                        <span class="font-medium ml-1" x-text="formatDate(item.updated_at)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="ml-4 flex space-x-2">
+                                <button @click="toggleWatched(item.id)" 
+                                        :class="item.is_watched ? 'bg-gray-600 hover:bg-gray-700' : 'bg-green-600 hover:bg-green-700'"
+                                        class="text-white px-3 py-1 rounded text-sm">
+                                    <i :class="item.is_watched ? 'fas fa-eye-slash' : 'fas fa-eye'" class="mr-1"></i>
+                                    <span x-text="item.is_watched ? '标记未看' : '标记已看'"></span>
+                                </button>
+                                
+                                <button @click="toggleTracking(item.id)" 
+                                        :class="item.is_tracking ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                        class="text-white px-3 py-1 rounded text-sm">
+                                    <i :class="item.is_tracking ? 'fas fa-pause' : 'fas fa-play'" class="mr-1"></i>
+                                    <span x-text="item.is_tracking ? '暂停追踪' : '开始追踪'"></span>
+                                </button>
+                                
+                                <button @click="editSeries(item)" 
+                                        class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-edit mr-1"></i>编辑
+                                </button>
+                                
+                                <button @click="clearHistory(item.id)"
+                                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-eraser mr-1"></i>清空
+                                </button>
+
+                                <button @click="deleteSeries(item.id)" 
+                                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-trash mr-1"></i>删除
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- 添加/编辑剧集模态框 -->
+        <div x-show="showAddModal || showEditModal" 
+             x-cloak
+             style="display: none;"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4" x-text="showEditModal ? '编辑剧集' : '添加新剧集'"></h3>
+                    
+                    <form @submit.prevent="showEditModal ? updateSeries() : createSeries()">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">剧集名称</label>
+                            <input type="text" x-model="form.name" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">剧集URL</label>
+                            <input type="url" x-model="form.url" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" @click="closeModal()"
+                                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                                取消
+                            </button>
+                            <button type="submit"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                <span x-text="showEditModal ? '更新' : '添加'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                isAuthenticated: false,
+                authToken: null,
+                series: null,
+                loading: false,
+                showAddModal: false,
+                showEditModal: false,
+                editingId: null,
+                loginForm: {
+                    username: '',
+                    password: ''
+                },
+                loginError: '',
+                form: {
+                    name: '',
+                    url: ''
+                },
+
+                checkAuth() {
+                    // 检查是否有认证令牌
+                    const token = localStorage.getItem('auth_token');
+                    if (token) {
+                        this.authToken = token;
+                        this.isAuthenticated = true;
+                        this.loadSeries();
+                    }
+                },
+
+                async login() {
+                    try {
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(this.loginForm)
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            this.authToken = result.data.token;
+                            this.isAuthenticated = true;
+                            localStorage.setItem('auth_token', this.authToken);
+                            this.loginError = '';
+                            this.loadSeries();
+                        } else {
+                            this.loginError = result.message || '登录失败';
+                        }
+                    } catch (error) {
+                        this.loginError = '登录失败: ' + error.message;
+                    }
+                },
+
+                logout() {
+                    this.isAuthenticated = false;
+                    this.authToken = null;
+                    this.series = null;
+                    localStorage.removeItem('auth_token');
+                },
+
+                async loadSeries() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/series', {
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            this.series = result.data || [];
+                        } else {
+                            alert('加载失败: ' + result.message);
+                            this.series = [];
+                        }
+                    } catch (error) {
+                        alert('加载失败: ' + error.message);
+                        this.series = [];
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async createSeries() {
+                    try {
+                        const response = await fetch('/api/series', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + this.authToken
+                            },
+                            body: JSON.stringify(this.form)
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            this.series.unshift(result.data);
+                            this.closeModal();
+                            alert('添加成功！');
+                        } else {
+                            alert('添加失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('添加失败: ' + error.message);
+                    }
+                },
+
+                async updateSeries() {
+                    try {
+                        const response = await fetch(`/api/series/${this.editingId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + this.authToken
+                            },
+                            body: JSON.stringify(this.form)
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            const index = this.series.findIndex(s => s.id === this.editingId);
+                            if (index !== -1) {
+                                this.series[index] = result.data;
+                            }
+                            this.closeModal();
+                            alert('更新成功！');
+                        } else {
+                            alert('更新失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('更新失败: ' + error.message);
+                    }
+                },
+
+                editSeries(item) {
+                    this.editingId = item.id;
+                    this.form.name = item.name;
+                    this.form.url = item.url;
+                    this.showEditModal = true;
+                },
+
+                async deleteSeries(id) {
+                    if (!confirm('确定要删除这个剧集吗？')) return;
+                    
+                    try {
+                        const response = await fetch(`/api/series/${id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            this.series = this.series.filter(s => s.id !== id);
+                            alert('删除成功！');
+                        } else {
+                            alert('删除失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('删除失败: ' + error.message);
+                    }
+                },
+
+                async toggleWatched(id) {
+                    try {
+                        const item = this.series.find(s => s.id === id);
+                        const endpoint = item.is_watched ? 'unwatch' : 'watch';
+                        
+                        const response = await fetch(`/api/series/${id}/${endpoint}`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            item.is_watched = !item.is_watched;
+                        } else {
+                            alert('操作失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('操作失败: ' + error.message);
+                    }
+                },
+
+                async toggleTracking(id) {
+                    try {
+                        const response = await fetch(`/api/series/${id}/toggle-tracking`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            const item = this.series.find(s => s.id === id);
+                            item.is_tracking = result.data.is_tracking;
+                        } else {
+                            alert('操作失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('操作失败: ' + error.message);
+                    }
+                },
+
+                async clearHistory(id) {
+                    if (!confirm('确定要清空该剧集的历史记录和当前进度吗？')) return;
+                    try {
+                        const response = await fetch(`/api/series/${id}/clear-history`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            const item = this.series.find(s => s.id === id);
+                            item.history = [];
+                            item.current = null;
+                            alert('清空成功！');
+                        } else {
+                            alert('清空失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('清空失败: ' + error.message);
+                    }
+                },
+
+                closeModal() {
+                    this.showAddModal = false;
+                    this.showEditModal = false;
+                    this.editingId = null;
+                    this.form.name = '';
+                    this.form.url = '';
+                },
+
+                formatDate(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleString('zh-CN');
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
