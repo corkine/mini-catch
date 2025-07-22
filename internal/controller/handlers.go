@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"mini-catch/internal/cls"
 	"mini-catch/internal/config"
 	"mini-catch/internal/database"
 	"mini-catch/internal/slack"
+
+	"git.mazhangjing.com/corkine/cls-client"
 
 	"github.com/go-chi/chi/v5"
 )

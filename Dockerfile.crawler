@@ -10,6 +10,10 @@ WORKDIR /app
 # 复制 go mod 文件
 COPY go.mod go.sum ./
 
+# 设置 Go 私有仓库直连
+ENV GOPRIVATE=git.mazhangjing.com
+ENV GOPROXY=direct
+
 # 下载依赖
 RUN go mod download
 

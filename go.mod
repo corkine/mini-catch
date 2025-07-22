@@ -1,6 +1,6 @@
 module mini-catch
 
-go 1.24
+go 1.24.4
 
 require (
 	github.com/chromedp/chromedp v0.9.3
@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	git.mazhangjing.com/corkine/cls-client v0.0.0-20250722094538-e6726d8dfa8b // indirect
 	github.com/chromedp/cdproto v0.0.0-20231011050154-1d073bb38998 // indirect
 	github.com/chromedp/sysutil v1.0.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
