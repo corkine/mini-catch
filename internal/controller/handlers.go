@@ -12,7 +12,7 @@ import (
 	"mini-catch/internal/database"
 	"mini-catch/internal/slack"
 
-	"git.mazhangjing.com/corkine/cls-client"
+	"git.mazhangjing.com/corkine/cls-client/auth"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -22,14 +22,14 @@ type Handler struct {
 	db       *database.Database
 	config   config.Config
 	notifier *slack.Notifier
-	cls      *cls.CLSService
+	cls      *auth.CLSAuthService
 }
 
 // NewHandler 创建新的处理器
 func NewHandler(db *database.Database, config config.Config, notifier *slack.Notifier) *Handler {
-	var clsSvc *cls.CLSService
+	var clsSvc *auth.CLSAuthService
 	if config.CLS.PublicKey != "" && config.CLS.MatchPurpose != "" && config.CLS.RemoteServer != "" {
-		clsSvc = cls.NewCLSService(config.CLS.PublicKey, config.CLS.MatchPurpose, config.CLS.RemoteServer)
+		clsSvc = auth.NewCLSAuthService(config.CLS.PublicKey, config.CLS.MatchPurpose, config.CLS.RemoteServer)
 	} else {
 		log.Printf("No valid CLS Config found, skip")
 	}

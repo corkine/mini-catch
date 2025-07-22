@@ -9,6 +9,8 @@
     "cls": {
         "public_key": "",
         "match_purpose": "MiniCatch",
-        "remote_server": ""
+        "remote_server": "",
+        "project_url": "",
+        "project_token": ""
     }
 }

@@ -20,6 +20,8 @@ type Config struct {
 		PublicKey    string `json:"public_key"`
 		MatchPurpose string `json:"match_purpose"`
 		RemoteServer string `json:"remote_server"`
+		ProjectURL   string `json:"project_url"`
+		ProjectToken string `json:"project_token"`
 	} `json:"cls"`
 }
 

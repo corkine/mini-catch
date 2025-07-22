@@ -13,6 +13,8 @@ import (
 	handlers "mini-catch/internal/controller"
 	"mini-catch/internal/database"
 	"mini-catch/internal/slack"
+
+	"git.mazhangjing.com/corkine/cls-client/data"
 )
 
 // App 应用结构
@@ -31,6 +33,27 @@ func main() {
 	config, err := config.LoadConfig("config.json")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
+	}
+
+	var svc *data.CLSDataService
+	if config.CLS.ProjectURL != "" && config.CLS.ProjectToken != "" {
+		svc = data.NewCLSDataService(
+			config.CLS.ProjectURL,
+			config.CLS.ProjectToken,
+			config.DatabasePath)
+	}
+
+	// 如果数据库文件不存在，执行初始化
+	if svc != nil {
+		if _, err := os.Stat(config.DatabasePath); os.IsNotExist(err) {
+			err := svc.DownloadLatestDB()
+			if err != nil {
+				log.Fatalf("下载数据失败: %v", err)
+			}
+			log.Println("✅ 数据已从服务器下载")
+		} else {
+			log.Println("✅ 数据库文件已存在，跳过下载")
+		}
 	}
 
 	// 初始化数据库
@@ -96,6 +119,11 @@ func main() {
 	// 关闭数据库连接
 	if err := app.db.Close(); err != nil {
 		log.Printf("关闭数据库连接错误: %v", err)
+	}
+
+	if svc != nil {
+		svc.UploadDB("Upload by MiniCatch v" + Version)
+		log.Println("✅ 数据已备份到服务器")
 	}
 
 	log.Println("✅ 服务器已关闭")
