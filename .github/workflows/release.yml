@@ -21,6 +21,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push main Docker image
+        if: endsWith(github.ref_name, '-server') || (!endsWith(github.ref_name, '-server') && !endsWith(github.ref_name, '-crawler'))
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -33,6 +34,7 @@ jobs:
             APP_VERSION=${{ github.ref_name }}
 
       - name: Build and push crawler Docker image
+        if: endsWith(github.ref_name, '-crawler') || (!endsWith(github.ref_name, '-server') && !endsWith(github.ref_name, '-crawler'))
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -45,6 +47,7 @@ jobs:
             APP_VERSION=${{ github.ref_name }}
 
       - name: Trigger remote deployment
+        if: endsWith(github.ref_name, '-server') || (!endsWith(github.ref_name, '-server') && !endsWith(github.ref_name, '-crawler'))
         env:
           SSH_DESTINATION: ${{ secrets.SSH_DESTINATION }}
         run: |

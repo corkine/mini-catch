@@ -14,15 +14,16 @@ type Database struct {
 
 // Series 剧集信息
 type Series struct {
-	ID         int64     `json:"id"`
-	Name       string    `json:"name"`
-	URL        string    `json:"url"`
-	History    []string  `json:"history"`     // 历史集数 ["S01E01", "S01E02", ...]
-	Current    string    `json:"current"`     // 当前更新到的集数 "S03E02"
-	IsWatched  bool      `json:"is_watched"`  // 当前集数是否已观看
-	IsTracking bool      `json:"is_tracking"` // 是否启用追踪
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID              int64      `json:"id"`
+	Name            string     `json:"name"`
+	URL             string     `json:"url"`
+	History         []string   `json:"history"`     // 历史集数 ["S01E01", "S01E02", ...]
+	Current         string     `json:"current"`     // 当前更新到的集数 "S03E02"
+	IsWatched       bool       `json:"is_watched"`  // 当前集数是否已观看
+	IsTracking      bool       `json:"is_tracking"` // 是否启用追踪
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	CrawlerLastSeen *time.Time `json:"crawler_last_seen"`
 }
 
 // FetchTask 爬虫任务
@@ -75,13 +76,46 @@ func (d *Database) CreateTables() error {
 	);`
 
 	_, err := d.db.Exec(createSeriesTable)
+
+	if err != nil {
+		return err
+	}
+
+	if exists, err := d.columnExists("series", "crawler_last_seen"); err == nil && !exists {
+		_, err = d.db.Exec("ALTER TABLE series ADD COLUMN crawler_last_seen DATETIME")
+		if err != nil {
+			return err
+		}
+	}
 	return err
+}
+
+func (d *Database) columnExists(tableName, columnName string) (bool, error) {
+	rows, err := d.db.Query("PRAGMA table_info(" + tableName + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // 获取所有剧集
 func (d *Database) GetAllSeries() ([]Series, error) {
 	rows, err := d.db.Query(`
-		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at
+		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at, crawler_last_seen
 		FROM series
 		ORDER BY updated_at DESC
 	`)
@@ -94,9 +128,11 @@ func (d *Database) GetAllSeries() ([]Series, error) {
 	for rows.Next() {
 		var s Series
 		var historyJSON string
+		var crawlerLastSeen sql.NullTime
 		err := rows.Scan(
 			&s.ID, &s.Name, &s.URL, &historyJSON, &s.Current,
 			&s.IsWatched, &s.IsTracking, &s.CreatedAt, &s.UpdatedAt,
+			&crawlerLastSeen,
 		)
 		if err != nil {
 			return nil, err
@@ -105,6 +141,10 @@ func (d *Database) GetAllSeries() ([]Series, error) {
 		// 解析历史集数 JSON
 		if err := json.Unmarshal([]byte(historyJSON), &s.History); err != nil {
 			return nil, err
+		}
+
+		if crawlerLastSeen.Valid {
+			s.CrawlerLastSeen = &crawlerLastSeen.Time
 		}
 
 		series = append(series, s)
@@ -137,13 +177,14 @@ func (d *Database) CreateSeries(name, url string) (*Series, error) {
 func (d *Database) GetSeriesByID(id int64) (*Series, error) {
 	var s Series
 	var historyJSON string
-
+	var crawlerLastSeen sql.NullTime
 	err := d.db.QueryRow(`
-		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at
+		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at, crawler_last_seen
 		FROM series WHERE id = ?
 	`, id).Scan(
 		&s.ID, &s.Name, &s.URL, &historyJSON, &s.Current,
 		&s.IsWatched, &s.IsTracking, &s.CreatedAt, &s.UpdatedAt,
+		&crawlerLastSeen,
 	)
 	if err != nil {
 		return nil, err
@@ -151,6 +192,10 @@ func (d *Database) GetSeriesByID(id int64) (*Series, error) {
 
 	if err := json.Unmarshal([]byte(historyJSON), &s.History); err != nil {
 		return nil, err
+	}
+
+	if crawlerLastSeen.Valid {
+		s.CrawlerLastSeen = &crawlerLastSeen.Time
 	}
 
 	return &s, nil
@@ -213,9 +258,20 @@ func (d *Database) UpdateSeriesInfo(url string, current string, series []string)
 	// 有新集数时，自动重置为未看状态，因为新集数还没看
 	_, err = d.db.Exec(`
 		UPDATE series 
-		SET current = ?, history = ?, is_watched = 0, updated_at = CURRENT_TIMESTAMP
+		SET current = ?, history = ?, is_watched = 0, updated_at = CURRENT_TIMESTAMP,
+			crawler_last_seen = CURRENT_TIMESTAMP
 		WHERE url = ?
 	`, current, historyJSON, url)
+	return err
+}
+
+// 更新剧集爬虫最后更新时间
+func (d *Database) UpdateSeriesCrawlerLastSeen(url string, lastSeen time.Time) error {
+	_, err := d.db.Exec(`
+		UPDATE series 
+		SET crawler_last_seen = ?
+		WHERE url = ?
+	`, lastSeen, url)
 	return err
 }
 
@@ -243,13 +299,14 @@ func (d *Database) GetAllTrackingURLs() ([]string, error) {
 func (d *Database) GetSeriesByURL(url string) (*Series, error) {
 	var s Series
 	var historyJSON string
-
+	var crawlerLastSeen sql.NullTime
 	err := d.db.QueryRow(`
-		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at
+		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at, crawler_last_seen
 		FROM series WHERE url = ?
 	`, url).Scan(
 		&s.ID, &s.Name, &s.URL, &historyJSON, &s.Current,
 		&s.IsWatched, &s.IsTracking, &s.CreatedAt, &s.UpdatedAt,
+		&crawlerLastSeen,
 	)
 	if err != nil {
 		return nil, err
@@ -257,6 +314,10 @@ func (d *Database) GetSeriesByURL(url string) (*Series, error) {
 
 	if err := json.Unmarshal([]byte(historyJSON), &s.History); err != nil {
 		return nil, err
+	}
+
+	if crawlerLastSeen.Valid {
+		s.CrawlerLastSeen = &crawlerLastSeen.Time
 	}
 
 	return &s, nil

@@ -319,6 +319,10 @@ func (h *Handler) HandleFetchTaskCallback(w http.ResponseWriter, r *http.Request
 				if err := h.db.UpdateSeriesInfo(result.URL, result.Update, result.Series); err != nil {
 					log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
 				}
+			} else {
+				if err := h.db.UpdateSeriesCrawlerLastSeen(result.URL, time.Now()); err != nil {
+					log.Printf("更新剧集爬虫最后更新时间失败 [%s]: %v", result.Name, err)
+				}
 			}
 		}
 
