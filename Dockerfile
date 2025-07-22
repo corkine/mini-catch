@@ -1,8 +1,8 @@
 # 使用官方 Go 镜像作为构建环境
 FROM golang:1.24-alpine AS builder
 
-# 安装构建依赖（包括 C 编译器）
-RUN apk add --no-cache gcc musl-dev
+# 安装构建依赖（包括 C 编译器 和 git）
+RUN apk add --no-cache gcc musl-dev git
 
 # 设置工作目录
 WORKDIR /app
