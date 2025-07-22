@@ -117,7 +117,7 @@ func (d *Database) GetAllSeries() ([]Series, error) {
 	rows, err := d.db.Query(`
 		SELECT id, name, url, history, current, is_watched, is_tracking, created_at, updated_at, crawler_last_seen
 		FROM series
-		ORDER BY updated_at DESC
+		ORDER BY is_tracking DESC, updated_at DESC
 	`)
 	if err != nil {
 		return nil, err
