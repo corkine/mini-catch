@@ -131,3 +131,47 @@ func (n *Notifier) SendTestNotification() error {
 
 	return n.sendToSlack(message)
 }
+
+// SendUpdateStatusNotification 发送剧集更新状态变更的 Slack 通知
+func (n *Notifier) SendUpdateStatusNotification(seriesName, oldStatus, newStatus, url string) {
+	if n.webhookURL == "" {
+		log.Printf("Slack Webhook URL 未配置，跳过通知")
+		return
+	}
+
+	attachment := SlackAttachment{
+		Color:     "#439FE0", // 蓝色
+		Title:     fmt.Sprintf("🎬 %s 更新状态变更", seriesName),
+		TitleLink: url,
+		Text:      fmt.Sprintf("更新状态: %s → %s", oldStatus, newStatus),
+		Fields: []Field{
+			{
+				Title: "剧集名称",
+				Value: seriesName,
+				Short: true,
+			},
+			{
+				Title: "原状态",
+				Value: oldStatus,
+				Short: true,
+			},
+			{
+				Title: "新状态",
+				Value: newStatus,
+				Short: true,
+			},
+		},
+		Footer: "mini-catch 自动追踪",
+		Ts:     time.Now().Unix(),
+	}
+
+	message := SlackMessage{
+		Attachments: []SlackAttachment{attachment},
+	}
+
+	if err := n.sendToSlack(message); err != nil {
+		log.Printf("发送 Slack 更新状态通知失败: %v", err)
+	} else {
+		log.Printf("已发送 Slack 更新状态通知: %s %s → %s", seriesName, oldStatus, newStatus)
+	}
+}

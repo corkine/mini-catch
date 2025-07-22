@@ -357,8 +357,16 @@ func (h *Handler) HandleFetchTaskCallback(w http.ResponseWriter, r *http.Request
 					log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
 				}
 			} else {
-				if err := h.db.UpdateSeriesCrawlerLastSeen(result.URL, time.Now()); err != nil {
-					log.Printf("更新剧集爬虫最后更新时间失败 [%s]: %v", result.Name, err)
+				if result.Update != series.Current {
+					log.Printf("📤 发现更新状态变更: %s, %s -> %s", result.Name, series.Current, result.Update)
+					go h.notifier.SendUpdateStatusNotification(result.Name, series.Current, result.Update, result.URL)
+					if err := h.db.UpdateSeriesInfo(result.URL, result.Update, series.History); err != nil {
+						log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
+					}
+				} else {
+					if err := h.db.UpdateSeriesCrawlerLastSeen(result.URL, time.Now()); err != nil {
+						log.Printf("更新剧集爬虫最后更新时间失败 [%s]: %v", result.Name, err)
+					}
 				}
 			}
 		}
