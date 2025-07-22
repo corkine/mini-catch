@@ -5,5 +5,10 @@
     "auth": {
         "username": "admin",
         "password": "admin123"
+    },
+    "cls": {
+        "public_key": "",
+        "match_purpose": "MiniCatch",
+        "remote_server": ""
     }
 }

@@ -16,6 +16,11 @@ type Config struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	} `json:"auth"`
+	CLS struct {
+		PublicKey    string `json:"public_key"`
+		MatchPurpose string `json:"match_purpose"`
+		RemoteServer string `json:"remote_server"`
+	} `json:"cls"`
 }
 
 // loadConfig 加载配置

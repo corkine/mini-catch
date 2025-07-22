@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"mini-catch/internal/cls"
 	"mini-catch/internal/config"
 	"mini-catch/internal/database"
 	"mini-catch/internal/slack"
@@ -20,14 +21,22 @@ type Handler struct {
 	db       *database.Database
 	config   config.Config
 	notifier *slack.Notifier
+	cls      *cls.CLSService
 }
 
 // NewHandler 创建新的处理器
-func NewHandler(db *database.Database, authConfig config.Config, notifier *slack.Notifier) *Handler {
+func NewHandler(db *database.Database, config config.Config, notifier *slack.Notifier) *Handler {
+	var clsSvc *cls.CLSService
+	if config.CLS.PublicKey != "" && config.CLS.MatchPurpose != "" && config.CLS.RemoteServer != "" {
+		clsSvc = cls.NewCLSService(config.CLS.PublicKey, config.CLS.MatchPurpose, config.CLS.RemoteServer)
+	} else {
+		log.Printf("No valid CLS Config found, skip")
+	}
 	return &Handler{
 		db:       db,
-		config:   authConfig,
+		config:   config,
 		notifier: notifier,
+		cls:      clsSvc,
 	}
 }
 
@@ -57,14 +66,41 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 验证用户名和密码
-	if req.Username != h.config.Auth.Username || req.Password != h.config.Auth.Password {
-		h.errorResponse(w, http.StatusUnauthorized, "用户名或密码错误")
-		return
+	// 如果用户名是 CLS，则使用 CLS JWT 认证
+	// 如果用户名是 CLST，则使用 CLS Token 认证
+	switch req.Username {
+	case "CLS":
+		if h.cls == nil {
+			h.errorResponse(w, http.StatusUnauthorized, "CLS 认证未配置")
+			return
+		}
+		claims, err := h.cls.JwtAuth(req.Password)
+		if err != nil {
+			h.errorResponse(w, http.StatusUnauthorized, "认证失败: "+err.Error())
+			return
+		}
+		log.Printf("CLS JWT 认证成功: %+v", claims)
+	case "CLST":
+		if h.cls == nil {
+			h.errorResponse(w, http.StatusUnauthorized, "CLS 认证未配置")
+			return
+		}
+		claims, err := h.cls.TokenAuth(req.Password)
+		if err != nil {
+			h.errorResponse(w, http.StatusUnauthorized, "认证失败: "+err.Error())
+			return
+		}
+		log.Printf("CLS Token 认证成功: %+v", claims)
+	default:
+		// 验证用户名和密码
+		if req.Username != h.config.Auth.Username || req.Password != h.config.Auth.Password {
+			h.errorResponse(w, http.StatusUnauthorized, "用户名或密码错误")
+			return
+		}
 	}
 
 	// 生成认证令牌
-	token := GenerateAuthToken(req.Username, req.Password)
+	token := GenerateAuthToken(h.config.Auth.Username, h.config.Auth.Password)
 
 	// 设置 Cookie
 	http.SetCookie(w, &http.Cookie{
