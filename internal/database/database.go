@@ -22,7 +22,7 @@ type Series struct {
 	IsWatched       bool       `json:"is_watched"`  // 当前集数是否已观看
 	IsTracking      bool       `json:"is_tracking"` // 是否启用追踪
 	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	UpdatedAt       time.Time  `json:"updated_at"` // History, Current 更新才算
 	CrawlerLastSeen *time.Time `json:"crawler_last_seen"`
 }
 
@@ -205,7 +205,7 @@ func (d *Database) GetSeriesByID(id int64) (*Series, error) {
 func (d *Database) UpdateSeries(id int64, name, url string) error {
 	_, err := d.db.Exec(`
 		UPDATE series 
-		SET name = ?, url = ?, updated_at = CURRENT_TIMESTAMP
+		SET name = ?, url = ?
 		WHERE id = ?
 	`, name, url, id)
 	return err
@@ -221,7 +221,7 @@ func (d *Database) DeleteSeries(id int64) error {
 func (d *Database) MarkAsWatched(id int64) error {
 	_, err := d.db.Exec(`
 		UPDATE series 
-		SET is_watched = 1, updated_at = CURRENT_TIMESTAMP
+		SET is_watched = 1
 		WHERE id = ?
 	`, id)
 	return err
@@ -231,7 +231,7 @@ func (d *Database) MarkAsWatched(id int64) error {
 func (d *Database) MarkAsUnwatched(id int64) error {
 	_, err := d.db.Exec(`
 		UPDATE series 
-		SET is_watched = 0, updated_at = CURRENT_TIMESTAMP
+		SET is_watched = 0
 		WHERE id = ?
 	`, id)
 	return err
@@ -241,8 +241,7 @@ func (d *Database) MarkAsUnwatched(id int64) error {
 func (d *Database) ToggleTracking(id int64) error {
 	_, err := d.db.Exec(`
 		UPDATE series 
-		SET is_tracking = CASE WHEN is_tracking = 1 THEN 0 ELSE 1 END,
-		    updated_at = CURRENT_TIMESTAMP
+		SET is_tracking = CASE WHEN is_tracking = 1 THEN 0 ELSE 1 END
 		WHERE id = ?
 	`, id)
 	return err
