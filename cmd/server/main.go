@@ -122,7 +122,7 @@ func main() {
 	}
 
 	if svc != nil {
-		svc.UploadDB("Upload by MiniCatch v" + Version)
+		svc.UploadDB("Upload by MiniCatch " + Version)
 		log.Println("✅ 数据已备份到服务器")
 	}
 

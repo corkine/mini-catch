@@ -87,7 +87,7 @@ func (n *Notifier) buildSlackMessage(seriesName string, newEpisodes []string, ur
 				Short: false,
 			},
 		},
-		Footer: "mini-catch 自动追踪",
+		Footer: "MiniCatch 自动追踪",
 		Ts:     time.Now().Unix(),
 	}
 
@@ -113,7 +113,7 @@ func (n *Notifier) sendToSlack(message SlackMessage) error {
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Slack API 返回错误状态码: %d", resp.StatusCode)
+		return fmt.Errorf("slack API 返回错误状态码: %d", resp.StatusCode)
 	}
 
 	return nil
@@ -122,11 +122,11 @@ func (n *Notifier) sendToSlack(message SlackMessage) error {
 // SendTestNotification 发送测试通知
 func (n *Notifier) SendTestNotification() error {
 	if n.webhookURL == "" {
-		return fmt.Errorf("Slack Webhook URL 未配置")
+		return fmt.Errorf("slack Webhook URL 未配置")
 	}
 
 	message := SlackMessage{
-		Text: "🧪 mini-catch 测试通知\n如果您看到这条消息，说明 Slack 通知功能配置正确！",
+		Text: "🧪 MiniCatch 测试通知\n如果您看到这条消息，说明 Slack 通知功能配置正确！",
 	}
 
 	return n.sendToSlack(message)
@@ -141,9 +141,9 @@ func (n *Notifier) SendUpdateStatusNotification(seriesName, oldStatus, newStatus
 
 	attachment := SlackAttachment{
 		Color:     "#439FE0", // 蓝色
-		Title:     fmt.Sprintf("🎬 %s 更新状态变更", seriesName),
+		Title:     fmt.Sprintf("🎬 %s %s", seriesName, newStatus),
 		TitleLink: url,
-		Text:      fmt.Sprintf("更新状态: %s → %s", oldStatus, newStatus),
+		Text:      fmt.Sprintf("%s有更新: %s", seriesName, newStatus),
 		Fields: []Field{
 			{
 				Title: "剧集名称",
@@ -161,7 +161,7 @@ func (n *Notifier) SendUpdateStatusNotification(seriesName, oldStatus, newStatus
 				Short: true,
 			},
 		},
-		Footer: "mini-catch 自动追踪",
+		Footer: "MiniCatch 自动追踪",
 		Ts:     time.Now().Unix(),
 	}
 
