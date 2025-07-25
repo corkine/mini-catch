@@ -309,7 +309,7 @@
             return {
                 isAuthenticated: false,
                 authToken: null,
-                series: null,
+                series: [],
                 loading: false,
                 showAddModal: false,
                 showEditModal: false,
@@ -379,7 +379,7 @@
                 logout() {
                     this.isAuthenticated = false;
                     this.authToken = null;
-                    this.series = null;
+                    this.series = [];
                     localStorage.removeItem('auth_token');
                     this.settingsForm = { crawler_start_time: '', crawler_end_time: '' };
                 },
