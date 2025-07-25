@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mini-catch/internal/database"
 	"net/http"
 	"regexp"
 	"sort"
@@ -22,13 +23,6 @@ type Config struct {
 	Debug     bool   `json:"debug"`
 	Headless  bool   `json:"headless"`
 	Timeout   int    `json:"timeout"`
-}
-
-// Task 爬虫任务
-// 注意：tasks 字段名要与后端一致
-type Task struct {
-	URLs        []string `json:"tasks"`
-	CallbackURL string   `json:"callback_url"`
 }
 
 // SeriesInfo 剧集信息
@@ -112,7 +106,7 @@ func (c *Mini4KCrawler) login() error {
 }
 
 // fetchTasks 获取爬虫任务
-func (c *Mini4KCrawler) fetchTasks() (*Task, error) {
+func (c *Mini4KCrawler) fetchTasks() (*database.FetchTask, error) {
 	req, err := http.NewRequest("GET", c.config.ServerURL+"/api/fetch", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
@@ -131,9 +125,9 @@ func (c *Mini4KCrawler) fetchTasks() (*Task, error) {
 	}
 
 	var result struct {
-		Success bool   `json:"success"`
-		Data    Task   `json:"data"`
-		Message string `json:"message"`
+		Success bool               `json:"success"`
+		Data    database.FetchTask `json:"data"`
+		Message string             `json:"message"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

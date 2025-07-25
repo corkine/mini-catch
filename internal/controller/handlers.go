@@ -297,8 +297,108 @@ func (h *Handler) ClearSeriesHistory(w http.ResponseWriter, r *http.Request) {
 	h.successResponse(w, series)
 }
 
+// GetSettings 获取全局配置
+func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.db.GetSettings()
+	if err != nil {
+		h.errorResponse(w, http.StatusInternalServerError, "获取配置失败: "+err.Error())
+		return
+	}
+	h.successResponse(w, settings)
+}
+
+// UpdateSettings 更新全局配置
+func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var settings database.Settings
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		h.errorResponse(w, http.StatusBadRequest, "请求参数错误: "+err.Error())
+		return
+	}
+
+	// 简单的验证
+	if (settings.CrawlerStartTime != "" && !isValidTimeFormat(settings.CrawlerStartTime)) ||
+		(settings.CrawlerEndTime != "" && !isValidTimeFormat(settings.CrawlerEndTime)) {
+		h.errorResponse(w, http.StatusBadRequest, "时间格式不正确，请使用 HH:mm 格式")
+		return
+	}
+
+	if err := h.db.UpdateSettings(&settings); err != nil {
+		h.errorResponse(w, http.StatusInternalServerError, "更新配置失败: "+err.Error())
+		return
+	}
+	h.successResponse(w, settings)
+}
+
+// isValidTimeFormat 检查时间是否为 HH:mm 格式
+func isValidTimeFormat(timeStr string) bool {
+	_, err := time.Parse("15:04", timeStr)
+	return err == nil
+}
+
+// isCrawlerInWorkingHours 检查当前是否在爬虫工作时间段内
+func (h *Handler) isCrawlerInWorkingHours() (bool, error) {
+	settings, err := h.db.GetSettings()
+	if err != nil {
+		// 如果获取配置失败，默认允许执行，但返回错误以供记录
+		return true, fmt.Errorf("获取配置失败: %v", err)
+	}
+
+	if settings.CrawlerStartTime == "" || settings.CrawlerEndTime == "" {
+		// 如果没有设置时间，默认一直为工作时间
+		return true, nil
+	}
+
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return true, fmt.Errorf("加载时区失败: %v", err)
+	}
+	nowInLoc := time.Now().In(loc)
+
+	startTime, errStart := time.ParseInLocation("15:04", settings.CrawlerStartTime, loc)
+	if errStart != nil {
+		return true, fmt.Errorf("解析开始时间失败: %v", errStart)
+	}
+
+	endTime, errEnd := time.ParseInLocation("15:04", settings.CrawlerEndTime, loc)
+	if errEnd != nil {
+		return true, fmt.Errorf("解析结束时间失败: %v", errEnd)
+	}
+
+	// 将今天的日期应用到开始和结束时间上
+	todayStart := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), startTime.Hour(), startTime.Minute(), 0, 0, loc)
+	todayEnd := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), endTime.Hour(), endTime.Minute(), 0, 0, loc)
+
+	// 如果结束时间早于开始时间，说明是跨天的（例如 22:00 - 02:00）
+	if todayEnd.Before(todayStart) {
+		// 当前时间晚于今天的开始时间，或者早于今天的结束时间（意味着是第二天的凌晨）
+		if nowInLoc.After(todayStart) || nowInLoc.Before(todayEnd) {
+			return true, nil
+		}
+	} else {
+		// 正常情况（例如 08:00 - 22:00）
+		if nowInLoc.After(todayStart) && nowInLoc.Before(todayEnd) {
+			return true, nil
+		}
+	}
+
+	// 不在工作时间段内
+	return false, nil
+}
+
 // HandleFetchTask 爬虫任务接口 - GET
 func (h *Handler) HandleFetchTask(w http.ResponseWriter, r *http.Request) {
+	inWorkingHours, err := h.isCrawlerInWorkingHours()
+	if err != nil {
+		// 检查工作时间出错，记录日志但默认放行
+		log.Printf("检查爬虫工作时间出错: %v", err)
+	}
+
+	if !inWorkingHours {
+		log.Printf("当前为爬虫非工作时间，不返回任务")
+		h.successResponse(w, database.FetchTask{URLs: []string{}})
+		return
+	}
+
 	// 获取所有启用的剧集URL
 	urls, err := h.db.GetAllTrackingURLs()
 	if err != nil {
@@ -347,26 +447,34 @@ func (h *Handler) HandleFetchTaskCallback(w http.ResponseWriter, r *http.Request
 				}
 			}
 
-			if len(newEpisodes) > 0 {
+			if len(newEpisodes) > 0 { // 发现新集数
 				log.Printf("📤 发现新集数: %s, %v", result.Name, newEpisodes)
-				// 发送Slack通知
-				go h.notifier.SendNotification(result.Name, newEpisodes, result.URL)
+
+				// 如果集数更新但是摘要没更新，那么不发送通知
+				if result.Update != "" && result.Update == series.Current {
+					log.Printf("摘要存在且没有更新，不发送通知")
+				} else {
+					go h.notifier.SendNotification(result.Name, newEpisodes, result.URL)
+				}
 
 				// 更新数据库
 				if err := h.db.UpdateSeriesInfo(result.URL, result.Update, result.Series); err != nil {
 					log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
 				}
-			} else {
-				if result.Update != series.Current {
-					log.Printf("📤 发现更新状态变更: %s, %s -> %s", result.Name, series.Current, result.Update)
-					go h.notifier.SendUpdateStatusNotification(result.Name, series.Current, result.Update, result.URL)
-					if err := h.db.UpdateSeriesInfo(result.URL, result.Update, series.History); err != nil {
-						log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
-					}
-				} else {
-					if err := h.db.UpdateSeriesCrawlerLastSeen(result.URL, time.Now()); err != nil {
-						log.Printf("更新剧集爬虫最后更新时间失败 [%s]: %v", result.Name, err)
-					}
+			} else if result.Update != series.Current { // 发现新摘要
+				log.Printf("📤 发现更新状态变更: %s, %s -> %s", result.Name, series.Current, result.Update)
+
+				// 发送通知
+				go h.notifier.SendUpdateStatusNotification(result.Name, series.Current, result.Update, result.URL)
+
+				// 更新数据库
+				if err := h.db.UpdateSeriesInfo(result.URL, result.Update, series.History); err != nil {
+					log.Printf("更新剧集信息失败 [%s]: %v", result.Name, err)
+				}
+			} else { // 没有更新
+				// 更新爬虫最后更新时间
+				if err := h.db.UpdateSeriesCrawlerLastSeen(result.URL, time.Now()); err != nil {
+					log.Printf("更新剧集爬虫最后更新时间失败 [%s]: %v", result.Name, err)
 				}
 			}
 		}

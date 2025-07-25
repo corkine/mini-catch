@@ -43,6 +43,9 @@ func SetupRoutes(config *config.Config, handler *Handler) *chi.Mux {
 			r.Get("/", handler.HandleFetchTask)
 			r.Post("/", handler.HandleFetchTaskCallback)
 		})
+
+		r.Get("/settings", handler.GetSettings)
+		r.Put("/settings", handler.UpdateSettings)
 	})
 
 	// 静态文件服务

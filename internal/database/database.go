@@ -26,6 +26,12 @@ type Series struct {
 	CrawlerLastSeen *time.Time `json:"crawler_last_seen"`
 }
 
+// Settings 全局配置
+type Settings struct {
+	CrawlerStartTime string `json:"crawler_start_time"`
+	CrawlerEndTime   string `json:"crawler_end_time"`
+}
+
 // FetchTask 爬虫任务
 type FetchTask struct {
 	URLs []string `json:"tasks"`
@@ -87,6 +93,18 @@ func (d *Database) CreateTables() error {
 			return err
 		}
 	}
+
+	// 创建全局配置表
+	createSettingsTable := `
+	CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY,
+		value TEXT
+	);`
+	_, err = d.db.Exec(createSettingsTable)
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 
@@ -331,4 +349,54 @@ func (d *Database) ClearSeriesHistory(id int64) error {
 		WHERE id = ?
 	`, emptyHistory, id)
 	return err
+}
+
+// GetSettings 获取全局配置
+func (d *Database) GetSettings() (*Settings, error) {
+	settings := &Settings{}
+	rows, err := d.db.Query("SELECT key, value FROM settings")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		switch key {
+		case "crawler_start_time":
+			settings.CrawlerStartTime = value
+		case "crawler_end_time":
+			settings.CrawlerEndTime = value
+		}
+	}
+	return settings, nil
+}
+
+// UpdateSettings 更新全局配置
+func (d *Database) UpdateSettings(settings *Settings) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+
+	if _, err := stmt.Exec("crawler_start_time", settings.CrawlerStartTime); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err := stmt.Exec("crawler_end_time", settings.CrawlerEndTime); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
