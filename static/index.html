@@ -81,8 +81,13 @@
             <!-- 剧集列表-->
             <div class="flex-1">
                 <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 class="text-lg font-semibold text-gray-900">剧集列表</h2>
+                <button @click="filterSuspense = !filterSuspense"
+                class="text-blue-500 text-sm px-4 py-2">
+                    <i :class="filterSuspense ? 'fas fa-filter' : 'fas fa-eye'" class="mr-1"></i>
+                    <span x-text="filterSuspense ? '正在追踪' : '所有剧集'"></span>
+                </button>
             </div>
             
             <!-- 加载状态 -->
@@ -102,7 +107,7 @@
 
             <!-- 剧集卡片 -->
             <div x-show="!loading && series && series.length > 0" class="divide-y divide-gray-200">
-                <template x-for="item in series" :key="item.id">
+                <template x-for="item in filteredSeries" :key="item.id">
                     <div class="p-6 hover:bg-gray-50 transition-colors">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
@@ -267,6 +272,7 @@
                 editingId: null,
                 showHistoryModal: false,
                 history: null,
+                filterSuspense: true,
                 loginForm: {
                     username: '',
                     password: ''
@@ -275,6 +281,13 @@
                 form: {
                     name: '',
                     url: ''
+                },
+
+                get filteredSeries() {
+                    if (this.filterSuspense) {
+                        return this.series.filter(s => s.is_tracking);
+                    }
+                    return this.series;
                 },
 
                 checkAuth() {
