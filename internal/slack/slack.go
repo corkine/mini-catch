@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mini-catch/internal/database"
 	"net/http"
 	"strings"
 	"time"
@@ -36,68 +37,31 @@ type Field struct {
 
 // Notifier Slack 通知器
 type Notifier struct {
-	webhookURL string
+	Db *database.Database
 }
 
-// NewNotifier 创建新的 Slack 通知器
-func NewNotifier(webhookURL string) *Notifier {
-	return &Notifier{
-		webhookURL: webhookURL,
+// getWebhookURL 从数据库获取 webhook URL
+func (n *Notifier) getWebhookURL() string {
+	if n.Db == nil {
+		return ""
 	}
+
+	settings, err := n.Db.GetSettings()
+	if err != nil {
+		log.Printf("获取设置失败: %v", err)
+		return ""
+	}
+
+	return settings.SlackWebhookURL
 }
 
-// SendNotification 发送 Slack 通知
-func (n *Notifier) SendNotification(seriesName string, newEpisodes []string, url string) {
-	if n.webhookURL == "" {
-		log.Printf("Slack Webhook URL 未配置，跳过通知")
-		return
+// send 发送消息到配置的 webhook
+func (n *Notifier) send(message SlackMessage) error {
+	webhookURL := n.getWebhookURL()
+	if webhookURL == "" {
+		return fmt.Errorf("slack Webhook URL 未配置")
 	}
 
-	// 构建消息
-	message := n.buildSlackMessage(seriesName, newEpisodes, url)
-
-	// 发送到 Slack
-	if err := n.sendToSlack(message); err != nil {
-		log.Printf("发送 Slack 通知失败: %v", err)
-	} else {
-		log.Printf("已发送 Slack 通知: %s 新增 %d 集", seriesName, len(newEpisodes))
-	}
-}
-
-// 构建 Slack 消息
-func (n *Notifier) buildSlackMessage(seriesName string, newEpisodes []string, url string) SlackMessage {
-	// 格式化新集数列表
-	episodeList := strings.Join(newEpisodes, ", ")
-
-	// 构建附件
-	attachment := SlackAttachment{
-		Color:     "#36a64f", // 绿色
-		Title:     fmt.Sprintf("🎬 %s 有新集数更新！", seriesName),
-		TitleLink: url,
-		Text:      fmt.Sprintf("发现 %d 集新内容", len(newEpisodes)),
-		Fields: []Field{
-			{
-				Title: "剧集名称",
-				Value: seriesName,
-				Short: true,
-			},
-			{
-				Title: "新增集数",
-				Value: episodeList,
-				Short: false,
-			},
-		},
-		Footer: "MiniCatch 自动追踪",
-		Ts:     time.Now().Unix(),
-	}
-
-	return SlackMessage{
-		Attachments: []SlackAttachment{attachment},
-	}
-}
-
-// 发送到 Slack
-func (n *Notifier) sendToSlack(message SlackMessage) error {
 	// 序列化消息
 	jsonData, err := json.Marshal(message)
 	if err != nil {
@@ -105,7 +69,7 @@ func (n *Notifier) sendToSlack(message SlackMessage) error {
 	}
 
 	// 发送 HTTP 请求
-	resp, err := http.Post(n.webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %v", err)
 	}
@@ -119,59 +83,77 @@ func (n *Notifier) sendToSlack(message SlackMessage) error {
 	return nil
 }
 
+// SendMessage 发送自定义消息
+func (n *Notifier) SendMessage(messageText string) error {
+	message := SlackMessage{Text: messageText}
+	return n.send(message)
+}
+
 // SendTestNotification 发送测试通知
 func (n *Notifier) SendTestNotification() error {
-	if n.webhookURL == "" {
-		return fmt.Errorf("slack Webhook URL 未配置")
-	}
-
 	message := SlackMessage{
 		Text: "🧪 MiniCatch 测试通知\n如果您看到这条消息，说明 Slack 通知功能配置正确！",
 	}
-
-	return n.sendToSlack(message)
+	return n.send(message)
 }
 
-// SendUpdateStatusNotification 发送剧集更新状态变更的 Slack 通知
-func (n *Notifier) SendUpdateStatusNotification(seriesName, oldStatus, newStatus, url string) {
-	if n.webhookURL == "" {
-		log.Printf("Slack Webhook URL 未配置，跳过通知")
-		return
-	}
+// SendNotification 发送剧集更新通知
+func (n *Notifier) SendNotification(seriesName string, newEpisodes []string, url string) {
+	message := n.buildEpisodeUpdateMessage(seriesName, newEpisodes, url)
 
+	if err := n.send(message); err != nil {
+		log.Printf("发送 Slack 通知失败: %v", err)
+	} else {
+		log.Printf("已发送 Slack 通知: %s 新增 %d 集", seriesName, len(newEpisodes))
+	}
+}
+
+// SendStatusUpdateNotification 发送剧集状态变更通知
+func (n *Notifier) SendStatusUpdateNotification(seriesName, oldStatus, newStatus, url string) {
+	message := n.buildStatusChangeMessage(seriesName, oldStatus, newStatus, url)
+
+	if err := n.send(message); err != nil {
+		log.Printf("发送 Slack 更新状态通知失败: %v", err)
+	} else {
+		log.Printf("已发送 Slack 更新状态通知: %s %s → %s", seriesName, oldStatus, newStatus)
+	}
+}
+
+// buildStatusChangeMessage 构建状态变更消息
+func (n *Notifier) buildStatusChangeMessage(seriesName, oldStatus, newStatus, url string) SlackMessage {
 	attachment := SlackAttachment{
 		Color:     "#439FE0", // 蓝色
 		Title:     fmt.Sprintf("🎬 %s %s", seriesName, newStatus),
 		TitleLink: url,
 		Text:      fmt.Sprintf("%s有更新: %s", seriesName, newStatus),
 		Fields: []Field{
-			{
-				Title: "剧集名称",
-				Value: seriesName,
-				Short: true,
-			},
-			{
-				Title: "原状态",
-				Value: oldStatus,
-				Short: true,
-			},
-			{
-				Title: "新状态",
-				Value: newStatus,
-				Short: true,
-			},
+			{Title: "剧集名称", Value: seriesName, Short: true},
+			{Title: "原状态", Value: oldStatus, Short: true},
+			{Title: "新状态", Value: newStatus, Short: true},
 		},
 		Footer: "MiniCatch 自动追踪",
 		Ts:     time.Now().Unix(),
 	}
 
-	message := SlackMessage{
-		Attachments: []SlackAttachment{attachment},
+	return SlackMessage{Attachments: []SlackAttachment{attachment}}
+}
+
+// buildEpisodeUpdateMessage 构建剧集更新消息
+func (n *Notifier) buildEpisodeUpdateMessage(seriesName string, newEpisodes []string, url string) SlackMessage {
+	episodeList := strings.Join(newEpisodes, ", ")
+
+	attachment := SlackAttachment{
+		Color:     "#36a64f", // 绿色
+		Title:     fmt.Sprintf("🎬 %s 有新集数更新！", seriesName),
+		TitleLink: url,
+		Text:      fmt.Sprintf("发现 %d 集新内容", len(newEpisodes)),
+		Fields: []Field{
+			{Title: "剧集名称", Value: seriesName, Short: true},
+			{Title: "新增集数", Value: episodeList, Short: false},
+		},
+		Footer: "MiniCatch 自动追踪",
+		Ts:     time.Now().Unix(),
 	}
 
-	if err := n.sendToSlack(message); err != nil {
-		log.Printf("发送 Slack 更新状态通知失败: %v", err)
-	} else {
-		log.Printf("已发送 Slack 更新状态通知: %s %s → %s", seriesName, oldStatus, newStatus)
-	}
+	return SlackMessage{Attachments: []SlackAttachment{attachment}}
 }

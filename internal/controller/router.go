@@ -46,6 +46,7 @@ func SetupRoutes(config *config.Config, handler *Handler) *chi.Mux {
 
 		r.Get("/settings", handler.GetSettings)
 		r.Put("/settings", handler.UpdateSettings)
+		r.Post("/settings/test-slack", handler.TestSlackWebhook)
 	})
 
 	// 静态文件服务

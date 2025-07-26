@@ -284,6 +284,19 @@
                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Slack Webhook URL</label>
+                            <div class="flex space-x-2">
+                                <input type="url" x-model="settingsForm.slack_webhook_url"
+                                       placeholder="https://hooks.slack.com/services/..."
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <button type="button" @click="testSlackWebhook()"
+                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm">
+                                    <i class="fas fa-paper-plane mr-1"></i>保存并测试
+                                </button>
+                            </div>
+                        </div>
+                        
                         <p class="text-xs text-gray-500 mb-6">
                             提示：如果结束时间早于开始时间，将被视为跨天范围（例如 22:00 - 02:00）。
                         </p>
@@ -329,7 +342,8 @@
                 },
                 settingsForm: {
                     crawler_start_time: '',
-                    crawler_end_time: ''
+                    crawler_end_time: '',
+                    slack_webhook_url: ''
                 },
 
                 get filteredSeries() {
@@ -416,6 +430,7 @@
                         if (result.success && result.data) {
                             this.settingsForm.crawler_start_time = result.data.crawler_start_time || '';
                             this.settingsForm.crawler_end_time = result.data.crawler_end_time || '';
+                            this.settingsForm.slack_webhook_url = result.data.slack_webhook_url || '';
                         }
                     } catch (error) {
                         console.error('加载配置失败:', error);
@@ -650,6 +665,48 @@
                     console.log('closeHistoryModal');
                     this.showHistoryModal = false;
                     this.history = null;
+                },
+
+                async testSlackWebhook() {
+                    if (!this.settingsForm.slack_webhook_url) {
+                        alert('请先输入 Slack Webhook URL');
+                        return;
+                    }
+                    
+                    try {
+                        // 先保存当前配置
+                        const saveResponse = await fetch('/api/settings', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + this.authToken
+                            },
+                            body: JSON.stringify(this.settingsForm)
+                        });
+                        
+                        const saveResult = await saveResponse.json();
+                        if (!saveResult.success) {
+                            alert('保存配置失败: ' + saveResult.message);
+                            return;
+                        }
+                        
+                        // 然后测试 webhook
+                        const testResponse = await fetch('/api/settings/test-slack', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+                        
+                        const testResult = await testResponse.json();
+                        if (testResult.success) {
+                            alert('测试消息发送成功！');
+                        } else {
+                            alert('测试失败: ' + testResult.message);
+                        }
+                    } catch (error) {
+                        alert('测试失败: ' + error.message);
+                    }
                 }
             }
         }

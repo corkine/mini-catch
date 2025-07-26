@@ -1,7 +1,5 @@
 {
     "port": "8080",
-    "database_path": "./data/mini-catch.db",
-    "slack_webhook_url": "",
     "auth": {
         "username": "admin",
         "password": "admin123"

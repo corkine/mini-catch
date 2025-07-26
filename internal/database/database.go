@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -30,6 +32,7 @@ type Series struct {
 type Settings struct {
 	CrawlerStartTime string `json:"crawler_start_time"`
 	CrawlerEndTime   string `json:"crawler_end_time"`
+	SlackWebhookURL  string `json:"slack_webhook_url"`
 }
 
 // FetchTask 爬虫任务
@@ -54,6 +57,13 @@ type FetchCallback struct {
 }
 
 func NewDatabase(dbPath string) (*Database, error) {
+	dir := filepath.Dir(dbPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			return nil, err
+		}
+	}
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
@@ -370,6 +380,8 @@ func (d *Database) GetSettings() (*Settings, error) {
 			settings.CrawlerStartTime = value
 		case "crawler_end_time":
 			settings.CrawlerEndTime = value
+		case "slack_webhook_url":
+			settings.SlackWebhookURL = value
 		}
 	}
 	return settings, nil
@@ -394,6 +406,10 @@ func (d *Database) UpdateSettings(settings *Settings) error {
 		return err
 	}
 	if _, err := stmt.Exec("crawler_end_time", settings.CrawlerEndTime); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err := stmt.Exec("slack_webhook_url", settings.SlackWebhookURL); err != nil {
 		tx.Rollback()
 		return err
 	}

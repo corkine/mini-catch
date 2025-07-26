@@ -26,6 +26,10 @@ type App struct {
 	server   *http.Server
 }
 
+const (
+	DATABASE_PATH = "data/mini-catch.db"
+)
+
 var Version = "dev"
 
 func main() {
@@ -40,12 +44,12 @@ func main() {
 		svc = data.NewCLSDataService(
 			config.CLS.ProjectURL,
 			config.CLS.ProjectToken,
-			config.DatabasePath)
+			DATABASE_PATH)
 	}
 
 	// 如果数据库文件不存在，执行初始化
 	if svc != nil {
-		if _, err := os.Stat(config.DatabasePath); os.IsNotExist(err) {
+		if _, err := os.Stat(DATABASE_PATH); os.IsNotExist(err) {
 			err := svc.DownloadLatestDB()
 			if err != nil {
 				log.Fatalf("下载数据失败: %v", err)
@@ -57,13 +61,13 @@ func main() {
 	}
 
 	// 初始化数据库
-	db, err := database.NewDatabase(config.DatabasePath)
+	db, err := database.NewDatabase(DATABASE_PATH)
 	if err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
 
 	// 初始化 Slack 通知器
-	notifier := slack.NewNotifier(config.SlackWebhookURL)
+	notifier := &slack.Notifier{Db: db}
 
 	// 初始化处理器
 	handler := handlers.NewHandler(db, *config, notifier)
@@ -84,15 +88,8 @@ func main() {
 		},
 	}
 
-	log.Printf("🚀 启动 mini-catch 服务器，端口: %s", app.config.Port)
+	log.Printf("🚀 启动 mini-catch 服务器，端口: %s", config.Port)
 	log.Printf("📦 版本: %s", Version)
-	log.Printf("📊 数据库路径: %s", app.config.DatabasePath)
-	log.Printf("👤 认证用户: %s", app.config.Auth.Username)
-	if app.config.SlackWebhookURL != "" {
-		log.Printf("📢 Slack 通知已启用")
-	} else {
-		log.Printf("📢 Slack 通知未配置")
-	}
 
 	// 优雅关闭
 	go func() {

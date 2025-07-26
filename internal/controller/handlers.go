@@ -329,6 +329,23 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	h.successResponse(w, settings)
 }
 
+// TestSlackWebhook 测试 Slack Webhook
+func (h *Handler) TestSlackWebhook(w http.ResponseWriter, r *http.Request) {
+	// 创建测试消息
+	testMessage := "🧪 这是一条来自 MiniCatch 的测试消息\n\n" +
+		"时间: " + time.Now().Format("2006-01-02 15:04:05") + "\n" +
+		"如果您看到这条消息，说明 Slack Webhook 配置正确！"
+
+	// 发送测试消息
+	err := h.notifier.SendMessage(testMessage)
+	if err != nil {
+		h.errorResponse(w, http.StatusInternalServerError, "发送测试消息失败: "+err.Error())
+		return
+	}
+
+	h.successResponse(w, map[string]string{"message": "测试消息发送成功"})
+}
+
 // isValidTimeFormat 检查时间是否为 HH:mm 格式
 func isValidTimeFormat(timeStr string) bool {
 	_, err := time.Parse("15:04", timeStr)
@@ -465,7 +482,7 @@ func (h *Handler) HandleFetchTaskCallback(w http.ResponseWriter, r *http.Request
 				log.Printf("📤 发现更新状态变更: %s, %s -> %s", result.Name, series.Current, result.Update)
 
 				// 发送通知
-				go h.notifier.SendUpdateStatusNotification(result.Name, series.Current, result.Update, result.URL)
+				go h.notifier.SendStatusUpdateNotification(result.Name, series.Current, result.Update, result.URL)
 
 				// 更新数据库
 				if err := h.db.UpdateSeriesInfo(result.URL, result.Update, series.History); err != nil {

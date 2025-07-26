@@ -38,8 +38,6 @@ go mod tidy
 ```json
 {
     "port": "8080",
-    "database_path": "./data/mini-catch.db",
-    "slack_webhook_url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
     "auth": {
         "username": "admin",
         "password": "admin123"
@@ -49,8 +47,6 @@ go mod tidy
 
 **配置说明：**
 - `port`: 服务器监听端口
-- `database_path`: SQLite 数据库文件路径
-- `slack_webhook_url`: Slack Webhook URL（可选，留空则不发送通知）
 - `auth`: 认证配置
   - `username`: 登录用户名
   - `password`: 登录密码
